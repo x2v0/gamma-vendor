@@ -1,10 +1,8 @@
-"""Universal Gamma Site Vendoring: Download everything, keep Next.js structure."""
+"""Radical Universal Gamma Vendoring: click everything to download 100% chunks."""
 import asyncio
 from playwright.async_api import async_playwright
 import pathlib, os, re, urllib.parse
-import sys
 
-# Универсальные настройки (передаются через GitHub Actions)
 TARGET_URL = os.environ.get("TARGET_URL", "https://iskusstvo-zaboty-o-t-qqkkaff.gamma.site/")
 ROOT = pathlib.Path(".")
 
@@ -26,16 +24,10 @@ async def main():
                 if response.ok and url.startswith("http"):
                     parsed = urllib.parse.urlparse(url)
                     path = parsed.path.lstrip("/")
-                    
-                    # Универсальный срез префикса CDN (например, /5s9bbrdpq/)
-                    if path.startswith("5s9bbrdpq/"):
-                        path = path[len("5s9bbrdpq/"):]
-                        
+                    if path.startswith("5s9bbrdpq/"): path = path[len("5s9bbrdpq/"):]
                     if not path: path = "index.html"
-                    
                     filepath = ROOT / path
                     filepath.parent.mkdir(parents=True, exist_ok=True)
-                    
                     if not filepath.exists():
                         with open(filepath, "wb") as f:
                             f.write(body)
@@ -48,28 +40,35 @@ async def main():
         print(f"Navigating to {TARGET_URL}...")
         await page.goto(TARGET_URL, wait_until="networkidle", timeout=90000)
         
-        # Агрессивный скролл для загрузки lazy-chunks
+        # 1. Скроллинг
         for _ in range(10):
             await page.mouse.wheel(0, 2000)
-            await page.wait_for_timeout(800)
+            await page.wait_for_timeout(500)
             
+        # 2. АГРЕССИВНЫЙ КЛИК (вызывает подгрузку lazy-chunks)
+        print("Clicking all images to trigger lazy-load...")
+        images = await page.query_selector_all("img")
+        for img in images:
+            try:
+                await img.click(timeout=1000)
+                await page.wait_for_timeout(500)
+                # Закрываем оверлей зума (кликаем в пустоту)
+                await page.mouse.click(10, 10)
+                await page.wait_for_timeout(500)
+            except:
+                pass
+
         await page.wait_for_timeout(5000)
         html = await page.content()
         await b.close()
 
-    print("Patching HTML (removing only CDN domain)...")
-    
-    # Универсальная замена домена CDN на локальный корень
-    # Мы не трогаем пути _next, мы просто убираем домен
+    print("Patching HTML...")
     cdn_regex = re.compile(r'https?://assets\.gammahosted\.com(?:/[a-z0-9]+)?')
     html_str = cdn_regex.sub('', html)
-    
-    # Чистим пустой фон url('/**/')
     html_str = html_str.replace("url('/**/')", "none").replace('url("/**/")', "none")
     
     pathlib.Path("index.html").write_text(html_str, encoding="utf-8")
 
-    # Патчим ВСЕ JS и CSS (убираем домен из кода, чтобы скрипты искали локально)
     patched_count = 0
     for filepath in ROOT.rglob("*"):
         if filepath.is_file() and filepath.suffix in [".js", ".css", ".json"]:
@@ -82,7 +81,7 @@ async def main():
             except Exception:
                 pass
 
-    print(f"✅ Done. Patched {patched_count} JS/CSS/JSON files. Structure preserved.")
+    print(f"✅ Done. Patched {patched_count} files. Clicked all images.")
 
 if __name__ == "__main__":
     asyncio.run(main())
