@@ -100,17 +100,51 @@ async def main():
             stubs += 1
     if stubs: print(f"  Created {stubs} stubs")
 
+    # --- PRIVACY SHIELD ---
+    # Список доменов и путей, которые занимаются слежкой/аналитикой
+    TRACKERS = [
+        "cloudflareinsights.com", "cdn-cgi/rum", "google-analytics.com",
+        "googletagmanager.com", "mc.yandex.ru", "top-fwz1.mail.ru",
+        "connect.facebook.net", "static.hotjar.com", "script.hotjar.com"
+    ]
+    
     patched_count = 0
+    telemetry_removed = 0
+
     for filepath in ROOT.rglob("*"):
         if filepath.is_file() and filepath.suffix in [".js", ".css", ".json"]:
             try:
                 content = filepath.read_text(encoding="utf-8", errors="ignore")
+                orig = content
+
+                # 1. Убираем CDN пути
                 if "gammahosted.com" in content:
                     content = cdn_regex.sub('', content)
+
+                # 2. Вырезаем телеметрию и скрипты слежки (Total Privacy)
+                for tracker in TRACKERS:
+                    if tracker in content:
+                        # Вырезаем вызовы аналитики (например, fetch('/cdn-cgi/rum'))
+                        content = re.sub(r'fetch\([^)]*' + re.escape(tracker) + r'[^)]*\)', 'void(0)', content)
+                        content = re.sub(r'sendBeacon\([^)]*' + re.escape(tracker) + r'[^)]*\)', 'void(0)', content)
+                        # Вырезаем создание img-пикселей
+                        content = re.sub(r'new Image\([^)]*' + re.escape(tracker) + r'[^)]*\)', 'void(0)', content)
+                        # Вырезаем текстовые ссылки
+                        content = content.replace(tracker, 'about:blank')
+                        telemetry_removed += 1
+                
+                if content != orig:
                     filepath.write_text(content, encoding="utf-8")
                     patched_count += 1
             except Exception:
                 pass
+
+    # 3. Чистим телеметрию в HTML
+    for tracker in TRACKERS:
+        html_str = html_str.replace(tracker, 'about:blank')
+    pathlib.Path("index.html").write_text(html_str, encoding="utf-8")
+    print(f"✅ Privacy Shield: удалено телеметрии в {telemetry_removed} местах.")
+    print(f"✅ Done. Patched {patched_count} files. Created {stubs} stubs.")
 
     # === АВТО-ЗАГЛУШКИ ===
     print("Creating stubs for missing chunks...")
