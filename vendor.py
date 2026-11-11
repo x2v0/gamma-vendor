@@ -91,21 +91,46 @@ async def main():
     
     pathlib.Path("index.html").write_text(html_str, encoding="utf-8")
 
-    # --- SMART STUBS ---
-    # Ищем ссылки на чанки не только в HTML, но и внутри JS-файлов (Webpack runtime)
+    # --- MANIFEST PARSING (Скачиваем ВСЁ из карты Next.js) ---
+    print("Parsing Next.js manifests to download all chunks...")
+    
+    # Ищем файлы манифестов в скачанных файлах
+    manifests = [
+        ROOT / "_next" / "static" / "vQyp7iVN1nGPS1LA7cgut" / "_buildManifest.js",
+        ROOT / "_next" / "static" / "vQyp7iVN1nGPS1LA7cgut" / "_ssgManifest.js",
+        ROOT / "_next" / "static" / "vQyp7iVN1nGPS1LA7cgut" / "_clientMiddlewareManifest.js"
+    ]
+    
+    all_chunks_to_download = set()
+    for manifest in manifests:
+        if manifest.exists():
+            content = manifest.read_text(encoding="utf-8", errors="ignore")
+            # Ищем все пути к чанкам (они лежат внутри манифеста)
+            chunks = re.findall(r'chunks/([a-zA-Z0-9_-]+\.js)', content)
+            all_chunks_to_download.update(chunks)
+            print(f"  Found {len(chunks)} chunks in {manifest.name}")
+    
+    # Скачиваем всё, что нашли в манифестах
+    downloaded = 0
+    base_url = "https://assets.gammahosted.com/5s9bbrdpq/_next/static/immutable/chunks/"
+    for chunk in all_chunks_to_download:
+        cf = ROOT / "_next" / "static" / "immutable" / "chunks" / chunk
+        if not cf.exists():
+            try:
+                import urllib.request
+                req = urllib.request.Request(base_url + chunk, headers={"User-Agent": "Mozilla/5.0"})
+                with urllib.request.urlopen(req, timeout=10) as r:
+                    data = r.read()
+                cf.parent.mkdir(parents=True, exist_ok=True)
+                cf.write_bytes(data)
+                downloaded += 1
+            except:
+                pass
+    print(f"✅ Downloaded {downloaded} missing chunks from manifest.")
+
+    # Добиваем оставшиеся заглушками (на всякий случай)
     html_clean = pathlib.Path("index.html").read_text(encoding="utf-8")
     referenced_chunks = set(re.findall(r'chunks/([a-zA-Z0-9_-]+\.js)', html_clean))
-    
-    # Сканируем сами JS-файлы на предмет запросов других чанков
-    for js_file in ROOT.rglob("*.js"):
-        try:
-            content = js_file.read_text(encoding="utf-8", errors="ignore")
-            # Ищем паттерны вида "chunks/12345.js"
-            found = re.findall(r'chunks/([a-zA-Z0-9_-]+\.js)', content)
-            referenced_chunks.update(found)
-        except:
-            pass
-
     stubs = 0
     for chunk in referenced_chunks:
         cf = ROOT / "_next" / "static" / "immutable" / "chunks" / chunk
@@ -113,7 +138,7 @@ async def main():
             cf.parent.mkdir(parents=True, exist_ok=True)
             cf.write_text("console.log('stub');", encoding="utf-8")
             stubs += 1
-    if stubs: print(f"  Created {stubs} stubs for missing chunks")
+    if stubs: print(f"  Created {stubs} stubs for remaining chunks")
 
     # --- PRIVACY SHIELD ---
     # Список доменов и путей, которые занимаются слежкой/аналитикой
