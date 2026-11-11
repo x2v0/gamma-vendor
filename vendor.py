@@ -91,17 +91,29 @@ async def main():
     
     pathlib.Path("index.html").write_text(html_str, encoding="utf-8")
 
-    # Создаем заглушки для всех файлов, которые запрашивает HTML
+    # --- SMART STUBS ---
+    # Ищем ссылки на чанки не только в HTML, но и внутри JS-файлов (Webpack runtime)
     html_clean = pathlib.Path("index.html").read_text(encoding="utf-8")
-    referenced_chunks = set(re.findall(r'/_next/static/immutable/chunks/([a-zA-Z0-9_-]+\.js)', html_clean))
+    referenced_chunks = set(re.findall(r'chunks/([a-zA-Z0-9_-]+\.js)', html_clean))
+    
+    # Сканируем сами JS-файлы на предмет запросов других чанков
+    for js_file in ROOT.rglob("*.js"):
+        try:
+            content = js_file.read_text(encoding="utf-8", errors="ignore")
+            # Ищем паттерны вида "chunks/12345.js"
+            found = re.findall(r'chunks/([a-zA-Z0-9_-]+\.js)', content)
+            referenced_chunks.update(found)
+        except:
+            pass
+
     stubs = 0
     for chunk in referenced_chunks:
         cf = ROOT / "_next" / "static" / "immutable" / "chunks" / chunk
         if not cf.exists():
             cf.parent.mkdir(parents=True, exist_ok=True)
-            cf.write_text("// stub", encoding="utf-8")
+            cf.write_text("console.log('stub');", encoding="utf-8")
             stubs += 1
-    if stubs: print(f"  Created {stubs} stubs")
+    if stubs: print(f"  Created {stubs} stubs for missing chunks")
 
     # --- PRIVACY SHIELD ---
     # Список доменов и путей, которые занимаются слежкой/аналитикой
