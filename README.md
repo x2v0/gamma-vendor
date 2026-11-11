@@ -16,3 +16,21 @@ git clone https://github.com/ВАШ_ЮЗЕР/ВАШ_РЕПОЗИТОРИЙ.git
 cd ВАШ_РЕПОЗИТОРИЙ
 python server.py
 
+
+
+## 📱 W2A (Web-to-App) готовность
+
+Этот репозиторий содержит `server.go` — минималистичный HTTP-сервер на Go.
+
+### Как собрать APK для Android:
+
+1. Скомпилируйте Go-сервер:
+   `GOOS=android GOARCH=arm64 go build -o server server.go`
+2. Положите `server` + `index.html` + `_next/` + `assets/` внутрь APK (в папку `assets/`).
+3. При старте приложения распакуйте их и запустите `server` через `ProcessBuilder`.
+4. Откройте `http://127.0.0.1:8080` в WebView.
+
+### Преимущества:
+- **Офлайн.** Работает без интернета.
+- **Приватность.** Privacy Shield удаляет все трекеры.
+- **Скорость.** React-рантайм загружается с локального диска.
