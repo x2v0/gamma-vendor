@@ -62,9 +62,32 @@ async def main():
     print("Patching HTML...")
     cdn_regex = re.compile(r'https?://assets\.gammahosted\.com(?:/[a-z0-9]+)?')
     html_str = cdn_regex.sub('', html)
+    
+    # Anti-FOUC: Убираем белую полосу при загрузке
+    # Принудительно ставим темный фон на html и body ДО того, как React загрузится
+    anti_fouc_css = """
+    <style id="anti-fouc">
+      html, body { background-color: #2d3133 !important; margin: 0; padding: 0; overflow-x: hidden !important; }
+      #__next { background-color: #2d3133 !important; min-height: 100vh; }
+    </style>
+    """
+    if "</head>" in html_str:
+        html_str = html_str.replace("</head>", anti_fouc_css + "</head>", 1)
     html_str = html_str.replace("url('/**/')", "none").replace('url("/**/")', "none")
     
     pathlib.Path("index.html").write_text(html_str, encoding="utf-8")
+
+    # Создаем заглушки для всех файлов, которые запрашивает HTML
+    html_clean = pathlib.Path("index.html").read_text(encoding="utf-8")
+    referenced_chunks = set(re.findall(r'/_next/static/immutable/chunks/([a-zA-Z0-9_-]+\.js)', html_clean))
+    stubs = 0
+    for chunk in referenced_chunks:
+        cf = ROOT / "_next" / "static" / "immutable" / "chunks" / chunk
+        if not cf.exists():
+            cf.parent.mkdir(parents=True, exist_ok=True)
+            cf.write_text("// stub", encoding="utf-8")
+            stubs += 1
+    if stubs: print(f"  Created {stubs} stubs")
 
     patched_count = 0
     for filepath in ROOT.rglob("*"):
