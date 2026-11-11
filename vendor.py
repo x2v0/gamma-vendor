@@ -67,8 +67,19 @@ async def main():
     # Принудительно ставим темный фон на html и body ДО того, как React загрузится
     anti_fouc_css = """
     <style id="anti-fouc">
-      html, body { background-color: #2d3133 !important; margin: 0; padding: 0; overflow-x: hidden !important; }
-      #__next { background-color: #2d3133 !important; min-height: 100vh; }
+      /* Принудительный темный фон ДО загрузки React */
+      html, body { 
+        background-color: #2d3133 !important; 
+        color: #d6d9d7 !important;
+        margin: 0; padding: 0; 
+        overflow-x: hidden !important; 
+      }
+      #__next { 
+        background-color: #2d3133 !important; 
+        min-height: 100vh; 
+      }
+      /* Скрываем белый "мигающий" контент до гидратации */
+      #__next:empty { background-color: #2d3133 !important; }
     </style>
     """
     if "</head>" in html_str:
