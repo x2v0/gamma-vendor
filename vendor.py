@@ -59,6 +59,39 @@ async def main():
         await page.wait_for_timeout(2000)
 
         await page.wait_for_timeout(5000)
+        # --- FORCE DOWNLOAD MISSING CHUNKS ---
+        print("Force downloading missing chunks via browser fetch...")
+        import json as json_mod
+        stubs_list = []
+        if pathlib.Path("stubs_to_download.json").exists():
+            stubs_list = json_mod.loads(pathlib.Path("stubs_to_download.json").read_text())
+        
+        base_cdn = "https://assets.gammahosted.com/5s9bbrdpq/_next/static/immutable/chunks/"
+        downloaded = 0
+        for chunk_name in stubs_list:
+            try:
+                data = await page.evaluate("""
+                    async (url) => {
+                        try {
+                            const r = await fetch(url);
+                            if (!r.ok) return null;
+                            const buf = await r.arrayBuffer();
+                            return Array.from(new Uint8Array(buf));
+                        } catch(e) { return null; }
+                    }
+                """, base_cdn + chunk_name)
+                
+                if data and len(data) > 100:
+                    cf = ROOT / "_next" / "static" / "immutable" / "chunks" / chunk_name
+                    cf.parent.mkdir(parents=True, exist_ok=True)
+                    cf.write_bytes(bytes(data))
+                    downloaded += 1
+                    if downloaded % 10 == 0:
+                        print(f"  Downloaded {downloaded}/{len(stubs_list)}")
+            except Exception:
+                pass
+        print(f"✅ Force downloaded {downloaded} chunks.")
+        
         html = await page.content()
         await b.close()
 
