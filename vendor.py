@@ -1,4 +1,4 @@
-"""Radical Universal Gamma Vendoring: click everything to download 100% chunks."""
+"""Universal Gamma Vendoring: download everything, patch CDN, auto-stub missing."""
 import asyncio
 from playwright.async_api import async_playwright
 import pathlib, os, re, urllib.parse
@@ -39,22 +39,19 @@ async def main():
         page = await c.new_page()
         print(f"Navigating to {TARGET_URL}...")
         await page.goto(TARGET_URL, wait_until="networkidle", timeout=90000)
-        
-        # 1. Скроллинг
+
+        # Скролл и клики для загрузки lazy-chunks
         for _ in range(10):
             await page.mouse.wheel(0, 2000)
             await page.wait_for_timeout(500)
-            
-        # 2. АГРЕССИВНЫЙ КЛИК (вызывает подгрузку lazy-chunks)
-        print("Clicking all images to trigger lazy-load...")
+
         images = await page.query_selector_all("img")
         for img in images:
             try:
                 await img.click(timeout=1000)
-                await page.wait_for_timeout(500)
-                # Закрываем оверлей зума (кликаем в пустоту)
+                await page.wait_for_timeout(300)
                 await page.mouse.click(10, 10)
-                await page.wait_for_timeout(500)
+                await page.wait_for_timeout(300)
             except:
                 pass
 
@@ -81,7 +78,19 @@ async def main():
             except Exception:
                 pass
 
-    print(f"✅ Done. Patched {patched_count} files. Clicked all images.")
+    # === АВТО-ЗАГЛУШКИ ===
+    print("Creating stubs for missing chunks...")
+    html = pathlib.Path("index.html").read_text(encoding="utf-8")
+    referenced = set(re.findall(r'/_next/static/immutable/chunks/([a-zA-Z0-9_-]+\.js)', html))
+    stubs_created = 0
+    for chunk in referenced:
+        filepath = ROOT / "_next" / "static" / "immutable" / "chunks" / chunk
+        if not filepath.exists():
+            filepath.parent.mkdir(parents=True, exist_ok=True)
+            filepath.write_text("// stub for offline mode", encoding="utf-8")
+            stubs_created += 1
+
+    print(f"✅ Done. Patched {patched_count} files. Created {stubs_created} stubs.")
 
 if __name__ == "__main__":
     asyncio.run(main())
