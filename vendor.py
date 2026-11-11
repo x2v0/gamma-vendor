@@ -40,20 +40,23 @@ async def main():
         print(f"Navigating to {TARGET_URL}...")
         await page.goto(TARGET_URL, wait_until="networkidle", timeout=90000)
 
-        # Скролл и клики для загрузки lazy-chunks
-        for _ in range(10):
-            await page.mouse.wheel(0, 2000)
-            await page.wait_for_timeout(500)
+        # АГРЕССИВНЫЙ СКРОЛЛ ДО КОНЦА (Гарантирует загрузку всех lazy-chunks)
+        print("Scrolling to the very bottom...")
+        last_height = await page.evaluate("document.body.scrollHeight")
+        while True:
+            # Прокручиваем вниз
+            await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+            await page.wait_for_timeout(2000) # Ждем загрузки новых чанков
+            
+            # Проверяем, изменилась ли высота (значит, подгрузился новый контент)
+            new_height = await page.evaluate("document.body.scrollHeight")
+            if new_height == last_height:
+                break # Достигли дна
+            last_height = new_height
 
-        images = await page.query_selector_all("img")
-        for img in images:
-            try:
-                await img.click(timeout=1000)
-                await page.wait_for_timeout(300)
-                await page.mouse.click(10, 10)
-                await page.wait_for_timeout(300)
-            except:
-                pass
+        # Возвращаемся наверх
+        await page.evaluate("window.scrollTo(0, 0)")
+        await page.wait_for_timeout(2000)
 
         await page.wait_for_timeout(5000)
         html = await page.content()
