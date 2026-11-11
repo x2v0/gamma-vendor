@@ -16,6 +16,11 @@ async def main():
         
         async def handle_route(route):
             url = route.request.url
+            # --- PRIVACY FILTER (Не скачиваем трекеры) ---
+            TRACKERS = ["metrika", "cdn-cgi", "beacon.min.js", "hotjar", "google-analytics", "googletagmanager", "facebook.net", "mail.ru", "rum"]
+            if any(t in url for t in TRACKERS):
+                return await route.continue_()
+            # ---------------------------------------------
             if url.startswith("data:") or url.startswith("blob:"):
                 return await route.continue_()
             try:
